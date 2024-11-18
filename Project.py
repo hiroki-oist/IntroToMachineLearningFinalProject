@@ -9,13 +9,13 @@ import time
 import tiktoken
 import pickle
 
-# OpenAI API設定を読み込み
+# Load OpenAI API settings
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 embedding_model = "text-embedding-ada-002"
 gpt_model = "gpt-3.5-turbo"
 
-# 議事録データを読み込む関数（アジェンダのため）
+# Load minute data (for agendas)
 def load_json_files(base_dir="./", start=1, end=13):
     agendas = set()
     contents = []
@@ -27,10 +27,10 @@ def load_json_files(base_dir="./", start=1, end=13):
                 agendas.update(data.get("agenda", []))
                 contents.extend(data.get("content", []))
         else:
-            print(f"ファイルが見つかりません: {file_path}")
+            print(f"File not found: {file_path}")
     return list(agendas), contents
 
-# アジェンダを翻訳する関数
+# Translate agendas to English
 def translate_agendas(agendas):
     prompt = f"""
     Translate the following list of agendas into English. 
@@ -51,21 +51,21 @@ def translate_agendas(agendas):
     except Exception as e:
         raise Exception(f"Translation failed: {e}")
 
-# 質問とコンテンツ間の類似度を計算する関数
+# Calculate similarity between a question and contents
 def calculate_similarity(question, contents, all_embeddings, text_to_content_index):
-    # 質問のEmbeddingを生成
+    # Generate embedding for the question
     question_embedding = get_embedding(question)
 
-    # 事前に計算したEmbeddingを使用して類似度を計算
+    # Calculate similarities using precomputed embeddings
     similarities = [cosine_similarity([question_embedding], [ce])[0][0] for ce in all_embeddings]
 
-    # 類似度に基づいて上位のインデックスを取得
+    # Get indices of top matches based on similarity
     top_indices = np.argsort(similarities)[-3:][::-1]
 
-    # 元のコンテンツのインデックスにマッピング
+    # Map back to original content indices
     top_content_indices = [text_to_content_index[i] for i in top_indices]
 
-    # ユニークなコンテンツを収集
+    # Collect unique contents
     unique_content_indices = []
     seen_indices = set()
     for idx in top_content_indices:
@@ -75,10 +75,10 @@ def calculate_similarity(question, contents, all_embeddings, text_to_content_ind
         if len(unique_content_indices) >= 10:
             break
 
-    # 関連するコンテンツを返す
+    # Return related contents
     return [contents[i] for i in unique_content_indices]
 
-# Embeddingを生成する関数
+# Generate embeddings for input text
 def get_embedding(text):
     response = openai.Embedding.create(
         model=embedding_model,
@@ -89,7 +89,7 @@ def get_embedding(text):
     else:
         raise Exception(f"Embedding failed: {response}")
 
-# 回答を生成する関数
+# Generate an answer based on top related contents
 def generate_answer(question, top_contents):
     prompt = f"""
     Based on the following list of statements, answer the user's question in detail and as accurately as possible.
@@ -108,22 +108,22 @@ def generate_answer(question, top_contents):
     except Exception as e:
         raise Exception(f"Answer generation failed: {e}")
 
-# メイン関数
+# Main function
 def main():
     print("*"*100)
     print("Hello, this is a demo of ChatGPT-powered commentator of committees in the Japanese parliament!\n\nI can currently answer based on minutes during last year's meetings from the safety and security committee.")
     print("*"*100)
-    # アジェンダとコンテンツを読み込む（アジェンダの表示のため）
+    # Load agendas and contents (for displaying agendas)
     agendas, contents = load_json_files()
 
-    # アジェンダを翻訳
+    # Translate agendas
     translated_agendas = translate_agendas(agendas)
     print("Discussion that was made last year are below. Ask me any questions! :)")
     print("Agenda: ")
     for agenda in translated_agendas:
         print(f"- {agenda}")
 
-    # 事前に計算したEmbeddingを読み込む
+    # Load precomputed embeddings
     with open("embeddings.pkl", "rb") as f:
         data = pickle.load(f)
         all_embeddings = data["all_embeddings"]
@@ -131,16 +131,16 @@ def main():
         text_to_content_index = data["text_to_content_index"]
         contents = data["contents"]
 
-    # ユーザーの質問を受け付ける
+    # Accept a question from the user
     print("*" * 100)
     question = input("Question: ")
     print("Making answer, please wait...")
 
-    # 類似度に基づいて関連するコンテンツを取得
+    # Retrieve related contents based on similarity
     top_contents = calculate_similarity(question, contents, all_embeddings, text_to_content_index)
     print("\nI have collected the related discussions from the minutes! Making answer...\n")
 
-    # 回答を生成
+    # Generate an answer
     answer = generate_answer(question, top_contents)
     print("\nAnswer: ")
     print(answer)
