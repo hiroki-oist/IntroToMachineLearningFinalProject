@@ -9,17 +9,17 @@ import time
 import tiktoken
 import pickle
 
-# OpenAI API設定を読み込み
+# Load OpenAI API settings
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 embedding_model = "text-embedding-ada-002"
 
-# 議事録データを読み込む関数
+# Function to load minute data
 def load_json_files(base_dir="./", start=1, end=13):
     agendas = set()
     contents = []
-    print("*"*100)
-    print("Embedding計算用のデータを読み込んでいます...")
+    print("*" * 100)
+    print("Loading data for embedding calculations...")
     for i in range(start, end + 1):
         file_path = os.path.join(base_dir, f"Volume_{str(i).zfill(3)}", "full_text.json")
         if os.path.exists(file_path):
@@ -28,14 +28,14 @@ def load_json_files(base_dir="./", start=1, end=13):
                 agendas.update(data.get("agenda", []))
                 contents.extend(data.get("content", []))
         else:
-            print(f"ファイルが見つかりません: {file_path}")
-    print("データの読み込みが完了しました。")
+            print(f"File not found: {file_path}")
+    print("Data loading is complete.")
     return list(agendas), contents
 
-# テキストをトークン数に基づいて分割する関数
+# Function to split text based on token count
 def split_text(text, max_tokens):
     """
-    トークン数がmax_tokensを超える場合、テキストを分割します。
+    Splits text into smaller parts if it exceeds max_tokens.
     """
     encoder = tiktoken.encoding_for_model(embedding_model)
     tokens = encoder.encode(text)
@@ -46,10 +46,11 @@ def split_text(text, max_tokens):
         splits.append(split_text)
     return splits
 
-# コンテンツを処理して、トークン数の制限を満たすように分割する
+# Process contents to ensure token limit compliance
 def process_contents(contents, max_content_tokens=8000):
     """
-    コンテンツを分割して、テキストのリストと各テキストが元のコンテンツのどのインデックスに対応するかのマッピングを返します。
+    Processes contents, splitting text where necessary, and returns a list of texts 
+    and a mapping of each text to its original content index.
     """
     encoder = tiktoken.encoding_for_model(embedding_model)
     texts = []
@@ -60,10 +61,10 @@ def process_contents(contents, max_content_tokens=8000):
         content_text = json.dumps(content)
         content_tokens = len(encoder.encode(content_text))
         if content_tokens > max_content_tokens:
-            # テキストを分割
+            # Split text if it exceeds max token count
             content_splits = split_text(content_text, max_content_tokens)
             texts.extend(content_splits)
-            text_to_content_index.extend([content_index]*len(content_splits))
+            text_to_content_index.extend([content_index] * len(content_splits))
         else:
             texts.append(content_text)
             text_to_content_index.append(content_index)
@@ -71,10 +72,10 @@ def process_contents(contents, max_content_tokens=8000):
 
     return texts, text_to_content_index
 
-# テキストをチャンクに分割する
+# Split texts into chunks
 def chunk_texts(texts, max_tokens=8000):
     """
-    トークン数がmax_tokensを超えないように、テキストをチャンクに分割します。
+    Splits texts into chunks ensuring the token count does not exceed max_tokens.
     """
     encoder = tiktoken.encoding_for_model(embedding_model)
     chunks = []
@@ -95,19 +96,19 @@ def chunk_texts(texts, max_tokens=8000):
 
     return chunks
 
-# Embeddingを計算して保存するメイン関数
+# Main function to calculate and save embeddings
 def main():
-    # データを読み込む
+    # Load data
     agendas, contents = load_json_files()
 
-    # コンテンツを処理
+    # Process contents
     texts, text_to_content_index = process_contents(contents, max_content_tokens=8000)
     text_chunks = chunk_texts(texts, max_tokens=8000)
 
     all_embeddings = []
     all_texts = []
 
-    print("\nEmbeddingの計算を開始します。少々お待ちください。")
+    print("\nStarting embedding calculations. Please wait.")
     total_chunks = len(text_chunks)
     for idx, chunk in enumerate(text_chunks):
         response = openai.Embedding.create(
@@ -117,11 +118,11 @@ def main():
         embeddings = [np.array(data["embedding"]) for data in response["data"]]
         all_embeddings.extend(embeddings)
         all_texts.extend(chunk)
-        # 進捗状況を表示
-        print(f"進捗: {idx+1}/{total_chunks} チャンクのEmbeddingが完了しました。")
-    print("全てのEmbeddingが計算されました。")
+        # Display progress
+        print(f"Progress: {idx+1}/{total_chunks} chunks have been processed for embeddings.")
+    print("All embeddings have been calculated.")
 
-    # 結果を保存
+    # Save results
     with open("embeddings.pkl", "wb") as f:
         pickle.dump({
             "all_embeddings": all_embeddings,
@@ -129,7 +130,7 @@ def main():
             "text_to_content_index": text_to_content_index,
             "contents": contents
         }, f)
-    print("Embeddingの結果が 'embeddings.pkl' に保存されました。")
+    print("Embedding results have been saved to 'embeddings.pkl'.")
 
 if __name__ == "__main__":
     main()
