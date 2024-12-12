@@ -1,6 +1,3 @@
-with open("/mnt/data/README.md", "w") as file:
-    file.write("""# README
-
 This project demonstrates the use of OpenAI's GPT and embedding models to analyze and interact with parliamentary committee minutes from Japan. It consists of two scripts that handle data processing, embedding generation, and question-answering workflows.
 
 ---
